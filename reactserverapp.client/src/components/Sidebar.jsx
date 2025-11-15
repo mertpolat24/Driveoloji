@@ -39,7 +39,7 @@ const Sidebar = ({ isSidebarOpen, setIsSidebarOpen, activeView, setActiveView, c
         <div className="flex items-center justify-between pb-4 border-b border-white/20 flex-shrink-0 mb-4">
           {/* Logo/Başlık - Sadece açıkken görünür */}
           <h1 className={`text-xl font-bold text-white mr-auto transition-opacity duration-300 whitespace-nowrap ${isSidebarOpen ? 'opacity-100' : 'opacity-0 w-0 h-0 overflow-hidden'}`}>
-            <span className="bg-white/20 px-3 py-1 rounded-lg backdrop-blur-sm">KRAL DEPODA</span>
+            <span className="bg-white/20 px-3 py-1 rounded-lg backdrop-blur-sm">Driveoloji</span>
           </h1>
           {/* Toggle Butonu - Her zaman görünür */}
           <button
@@ -61,11 +61,14 @@ const Sidebar = ({ isSidebarOpen, setIsSidebarOpen, activeView, setActiveView, c
             <div className='overflow-hidden'>
               <p className={`font-bold text-white truncate ${!isSidebarOpen && 'hidden'}`}>{currentUser.userName}</p>
               <p className={`text-xs text-white/80 truncate ${!isSidebarOpen && 'hidden'}`}>{currentUser.userEmail}</p>
-              <span className={`px-2 py-0.5 mt-1 text-xs rounded-full font-semibold ${!isSidebarOpen && 'hidden'} ${currentUser.role === ROLES.ADMIN
-                ? 'bg-yellow-400 text-yellow-900'
-                : 'bg-emerald-400 text-emerald-900'
+              <span className={`px-2 py-0.5 mt-1 text-xs rounded-full font-semibold ${!isSidebarOpen && 'hidden'} ${
+                currentUser.role === ROLES.SUPERADMIN 
+                  ? 'bg-purple-400 text-purple-900'
+                  : currentUser.role === ROLES.ADMIN
+                  ? 'bg-yellow-400 text-yellow-900'
+                  : 'bg-emerald-400 text-emerald-900'
               }`}>
-                {currentUser.role === ROLES.ADMIN ? 'Yönetici' : 'Kullanıcı'}
+                {currentUser.role === ROLES.SUPERADMIN ? 'Süper Yönetici' : currentUser.role === ROLES.ADMIN ? 'Yönetici' : 'Kullanıcı'}
               </span>
             </div>
           </div>

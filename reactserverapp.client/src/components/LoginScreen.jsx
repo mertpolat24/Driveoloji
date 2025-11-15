@@ -1,35 +1,38 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { HardDrive, Zap } from 'lucide-react';
-import { INITIAL_MOCK_USERS } from '../data/mockData';
+import { login } from '../services/userApi';
 
 /**
  * Giriş Ekranı Bileşeni
  */
-const LoginScreen = ({ onLogin }) => {
+const LoginScreen = ({ onLogin, onShowRegister }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLoginAttempt = (e) => {
+  const handleLoginAttempt = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    const foundUser = INITIAL_MOCK_USERS.find(
-      user => user.userEmail === email && user.userPassword === password
-    );
-
-    if (foundUser) {
-      setTimeout(() => {
-        setIsLoading(false);
-        onLogin(foundUser); // Başarılı giriş: tüm kullanıcı nesnesini gönder
-      }, 1000);
-    } else {
-      setTimeout(() => {
-        setIsLoading(false);
-        setError('Geçersiz e-posta veya şifre.');
-      }, 1000);
+    try {
+      console.log('LoginScreen: Giriş denemesi yapılıyor...');
+      const user = await login(email, password);
+      console.log('LoginScreen: Giriş başarılı, kullanıcı:', user);
+      
+      // API'den gelen kullanıcıyı formatla (files array olarak)
+      const formattedUser = {
+        ...user,
+        files: user.files || [],
+      };
+      
+      setIsLoading(false);
+      onLogin(formattedUser); // Başarılı giriş: tüm kullanıcı nesnesini gönder
+    } catch (error) {
+      console.error('LoginScreen: Giriş hatası:', error);
+      setIsLoading(false);
+      setError(error.message || 'Geçersiz e-posta veya şifre.');
     }
   };
 
@@ -40,7 +43,7 @@ const LoginScreen = ({ onLogin }) => {
           <div className="p-4 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg mb-4">
             <HardDrive className="w-12 h-12 text-white" />
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">KRAL DEPODA Giriş</h1>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Serveroloji Giriş</h1>
           <p className="text-sm text-gray-600 mt-2">Lütfen hesabınıza giriş yapın</p>
         </div>
         <form onSubmit={handleLoginAttempt} className="space-y-6">
@@ -48,7 +51,7 @@ const LoginScreen = ({ onLogin }) => {
             <label className="block text-sm font-medium text-gray-700 mb-1">E-posta Adresi</label>
             <input
               type="email"
-              placeholder="admin@sistem.com veya user@sistem.com"
+              placeholder="E-posta adresinizi girin"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -85,14 +88,13 @@ const LoginScreen = ({ onLogin }) => {
             ) : 'Giriş Yap'}
           </button>
         </form>
-        <div className="mt-6 text-center text-sm text-gray-500">
-          <p>Bu bir simülasyon uygulamasıdır.</p>
-          <div className='mt-3 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl text-xs text-indigo-700 border border-indigo-100'>
-            <p className='font-semibold mb-1'>Yönetici Girişi:</p>
-            <p>E-posta: <strong>admin@sistem.com</strong> | Şifre: <strong>adminpassword</strong></p>
-            <p className='font-semibold mt-2 mb-1'>Normal Kullanıcı Girişi:</p>
-            <p>E-posta: <strong>user@sistem.com</strong> | Şifre: <strong>userpassword</strong></p>
-          </div>
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => onShowRegister && onShowRegister()}
+            className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition"
+          >
+            Hesabınız yok mu? Kayıt olun →
+          </button>
         </div>
       </div>
     </div>

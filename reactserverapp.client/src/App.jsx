@@ -1,39 +1,201 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Menu, LayoutDashboard } from 'lucide-react';
-import { INITIAL_MOCK_USERS } from './data/mockData';
 import { NAV_ITEMS, ROLES } from './constants';
 import LoginScreen from './components/LoginScreen';
+import RegisterScreen from './components/RegisterScreen';
 import Sidebar from './components/Sidebar';
 import DashboardView from './views/DashboardView';
 import StorageManagementView from './views/StorageManagementView';
 import SettingsView from './views/SettingsView';
 import AdminManagementView from './views/AdminManagementView';
+import DiskManagementView from './views/DiskManagementView';
 import FilePreviewModal from './components/FilePreviewModal';
+import { getAllUsers, getUser, updateUser as updateUserApi } from './services/userApi';
 
 /**
  * Ana Uygulama Bileşeni
  */
 const App = () => {
-  const [allUsers, setAllUsers] = useState(INITIAL_MOCK_USERS);
+  const [allUsers, setAllUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Desktop'ta varsayılan olarak açık
   const [activeView, setActiveView] = useState(NAV_ITEMS[0].id);
   const [previewFile, setPreviewFile] = useState(null);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [showRegister, setShowRegister] = useState(false); // Kayıt ekranını göster/gizle
 
   const isLoggedIn = !!currentUser; // Giriş yapıldı mı?
 
+  // Kullanıcı listesini API'den yükle (Admin ve SuperAdmin için)
+  const loadUsers = useCallback(async () => {
+    if (!currentUser || (currentUser.role !== ROLES.ADMIN && currentUser.role !== ROLES.SUPERADMIN)) return;
+    
+    setIsLoadingUsers(true);
+    try {
+      console.log('App: Kullanıcı listesi yükleniyor...');
+      const users = await getAllUsers();
+      console.log('App: Kullanıcı listesi alındı:', users);
+      setAllUsers(users);
+    } catch (error) {
+      console.error('App: Kullanıcı listesi yüklenirken hata:', error);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  }, [currentUser]);
+
+  // Admin ise kullanıcı listesini yükle
+  useEffect(() => {
+    if (currentUser && (currentUser.role === ROLES.ADMIN || currentUser.role === ROLES.SUPERADMIN)) {
+      loadUsers();
+    }
+  }, [currentUser?.userId, currentUser?.role, loadUsers]);
+
   // Giriş başarılı olduğunda çağrılır
-  const handleLogin = (user) => {
-    // allUsers'dan güncel kullanıcı verisini al
-    const updatedUser = allUsers.find(u => u.userId === user.userId) || user;
-    setCurrentUser(updatedUser);
+  const handleLogin = async (user) => {
+    console.log('App: Giriş yapıldı, kullanıcı:', user);
+    
+    // API'den güncel kullanıcı bilgilerini çek
+    try {
+      const updatedUser = await getUser(user.userId);
+      console.log('App: Güncel kullanıcı bilgileri alındı:', updatedUser);
+      const userData = {
+        ...updatedUser,
+        files: updatedUser.files || [],
+      };
+      setCurrentUser(userData);
+      
+      // Session'ı localStorage'a kaydet (30 gün geçerli)
+      const sessionData = {
+        user: userData,
+        loginTime: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 gün
+      };
+      localStorage.setItem('userSession', JSON.stringify(sessionData));
+    } catch (error) {
+      console.error('App: Kullanıcı bilgileri alınamadı, login\'den gelen kullanıcı kullanılıyor:', error);
+      const userData = {
+        ...user,
+        files: user.files || [],
+      };
+      setCurrentUser(userData);
+      
+      // Session'ı localStorage'a kaydet
+      const sessionData = {
+        user: userData,
+        loginTime: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 gün
+      };
+      localStorage.setItem('userSession', JSON.stringify(sessionData));
+    }
+    
     setActiveView(NAV_ITEMS[0].id); // Panoya yönlendir
   };
 
+  // Sayfa yüklendiğinde session kontrolü yap
+  useEffect(() => {
+    const checkSession = () => {
+      try {
+        const sessionData = localStorage.getItem('userSession');
+        if (sessionData) {
+          const session = JSON.parse(sessionData);
+          const now = new Date();
+          const expiresAt = new Date(session.expiresAt);
+          
+          // Session süresi dolmuş mu kontrol et
+          if (now < expiresAt) {
+            console.log('App: Session bulundu, kullanıcı otomatik giriş yapılıyor...');
+            setCurrentUser(session.user);
+          } else {
+            console.log('App: Session süresi dolmuş, temizleniyor...');
+            localStorage.removeItem('userSession');
+          }
+        }
+      } catch (error) {
+        console.error('App: Session kontrolü hatası:', error);
+        localStorage.removeItem('userSession');
+      }
+    };
+
+    checkSession();
+  }, []);
+
+  // Kullanıcı verilerini güncelleyen ana fonksiyon
+  const updateUserData = useCallback(async (field, value) => {
+    if (!currentUser) return;
+
+    try {
+      // Eğer dosya listesi güncelleniyorsa, sadece local state'i güncelle (API'ye göndermeye gerek yok)
+      if (field === 'files') {
+        const updatedUser = { ...currentUser, files: value };
+        setCurrentUser(updatedUser);
+        
+        // Session'ı güncelle
+        const sessionData = localStorage.getItem('userSession');
+        if (sessionData) {
+          const session = JSON.parse(sessionData);
+          session.user = updatedUser;
+          localStorage.setItem('userSession', JSON.stringify(session));
+        }
+        
+        // allUsers listesini de güncelle (eğer varsa)
+        if (allUsers.length > 0) {
+          const updatedUsers = allUsers.map(user =>
+            user.userId === currentUser.userId ? updatedUser : user
+          );
+          setAllUsers(updatedUsers);
+        }
+        return;
+      }
+
+      // Diğer alanlar için API'ye gönder
+      console.log('App: Kullanıcı güncelleniyor:', field, value);
+      const updatedUser = await updateUserApi(currentUser.userId, { [field]: value });
+      console.log('App: Kullanıcı güncellendi:', updatedUser);
+
+      // Local state'i güncelle
+      const userData = {
+        ...updatedUser,
+        files: currentUser.files || [], // Files'ı koru
+      };
+      setCurrentUser(userData);
+
+      // Session'ı güncelle
+      const sessionData = localStorage.getItem('userSession');
+      if (sessionData) {
+        const session = JSON.parse(sessionData);
+        session.user = userData;
+        localStorage.setItem('userSession', JSON.stringify(session));
+      }
+
+      // allUsers listesini de güncelle (eğer varsa)
+      if (allUsers.length > 0) {
+        const updatedUsers = allUsers.map(user =>
+          user.userId === currentUser.userId
+            ? { ...updatedUser, files: user.files || [] }
+            : user
+        );
+        setAllUsers(updatedUsers);
+      }
+    } catch (error) {
+      console.error('App: Kullanıcı güncellenirken hata:', error);
+      // Hata durumunda sadece local state'i güncelle (optimistic update)
+      const updatedUser = { ...currentUser, [field]: value };
+      setCurrentUser(updatedUser);
+    }
+  }, [currentUser, allUsers]);
+
+  // Artık dosya listesi her view'da kendi useEffect'i ile API'den yükleniyor
+  // App.jsx seviyesinde yüklemeye gerek yok
+
   // Çıkış yapıldığında çağrılır
   const handleLogout = () => {
-    setCurrentUser(null);
-    setIsSidebarOpen(false);
+    if (window.confirm('Çıkış yapmak istediğinize emin misiniz?')) {
+      // Session'ı temizle
+      localStorage.removeItem('userSession');
+      sessionStorage.removeItem('userSession');
+      setCurrentUser(null);
+      setIsSidebarOpen(false);
+    }
   };
 
   // Mevcut kullanıcının dosyalarını ve kotasını al
@@ -45,46 +207,19 @@ const App = () => {
     return currentFiles.reduce((total, file) => total + file.size, 0);
   }, [currentFiles]);
 
-  // Kullanıcı verilerini güncelleyen ana fonksiyon
-  const updateUserData = useCallback((field, value) => {
-    if (!currentUser) return;
-
-    // allUsers listesini güncelle
-    const updatedUsers = allUsers.map(user => {
-      if (user.userId === currentUser.userId) {
-        // Özel durum: Eğer dosya listesi güncelleniyorsa, doğrudan yeni değeri kullan
-        if (field === 'files') {
-          return { ...user, files: value };
-        }
-        // Diğer tüm alanlar için
-        return { ...user, [field]: value };
-      }
-      return user;
-    });
-
-    setAllUsers(updatedUsers);
-
-    // Güncellenen kullanıcıyı setCurrentUser ile de ayarla
-    const updatedCurrentUser = updatedUsers.find(user => user.userId === currentUser.userId);
-    if (updatedCurrentUser) {
-      setCurrentUser(updatedCurrentUser);
-    }
-  }, [allUsers, currentUser]);
-
   // Görünümü seçmek için switch case yapısı
   const renderContentView = useCallback(() => {
     if (!currentUser) return null;
 
     switch (activeView) {
-      case 'dashboard':
-        return <DashboardView
-          userName={currentUser.userName}
-          mockFiles={currentFiles}
-          totalGB={currentQuotaGB}
-          usedMB={usedMB}
-          setActiveView={setActiveView}
-          updateUserData={updateUserData}
-        />;
+          case 'dashboard':
+            return <DashboardView
+              userName={currentUser.userName}
+              totalGB={currentQuotaGB}
+              setActiveView={setActiveView}
+              updateUserData={updateUserData}
+              currentUser={currentUser}
+            />;
 
       case 'storage':
         return <StorageManagementView
@@ -100,10 +235,23 @@ const App = () => {
         />;
 
       case 'admin':
-        if (currentUser.role === ROLES.ADMIN) {
+        if (currentUser.role === ROLES.ADMIN || currentUser.role === ROLES.SUPERADMIN) {
           return <AdminManagementView
             allUsers={allUsers}
             setAllUsers={setAllUsers}
+            loadUsers={loadUsers}
+            isLoading={isLoadingUsers}
+            currentUser={currentUser}
+          />;
+        }
+        // Yetkisiz erişim durumunda panoya yönlendir
+        setActiveView('dashboard');
+        return null;
+
+      case 'disk':
+        if (currentUser.role === ROLES.ADMIN || currentUser.role === ROLES.SUPERADMIN) {
+          return <DiskManagementView
+            currentUser={currentUser}
           />;
         }
         // Yetkisiz erişim durumunda panoya yönlendir
@@ -113,18 +261,25 @@ const App = () => {
       default:
         return <DashboardView
           userName={currentUser.userName}
-          mockFiles={currentFiles}
           totalGB={currentQuotaGB}
-          usedMB={usedMB}
           setActiveView={setActiveView}
           updateUserData={updateUserData}
+          currentUser={currentUser}
         />;
     }
-  }, [activeView, currentUser, currentFiles, currentQuotaGB, usedMB, updateUserData, allUsers]);
+  }, [activeView, currentUser, currentQuotaGB, updateUserData, allUsers]);
 
-  // Eğer giriş yapılmadıysa sadece Giriş Ekranını göster
+  // Eğer giriş yapılmadıysa Login veya Register ekranını göster
   if (!isLoggedIn) {
-    return <LoginScreen onLogin={handleLogin} />;
+    if (showRegister) {
+      return (
+        <RegisterScreen
+          onRegisterSuccess={handleLogin}
+          onBackToLogin={() => setShowRegister(false)}
+        />
+      );
+    }
+    return <LoginScreen onLogin={handleLogin} onShowRegister={() => setShowRegister(true)} />;
   }
 
   // Masaüstünde menü açık/kapalı durumuna göre ana içeriğin sol margin'i

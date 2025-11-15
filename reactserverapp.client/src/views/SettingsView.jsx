@@ -10,13 +10,28 @@ const SettingsView = ({ currentUser, updateUserData }) => {
   const [openModal, setOpenModal] = useState(null);
   const [feedback, setFeedback] = useState({ message: '', type: '' });
 
-  const handleUpdate = (field, newValue) => {
-    if (field === 'userPassword') {
-      // Parola sadece simüle ediliyor, gerçek update yok
-      setFeedback({ message: `Şifre başarıyla güncellendi (Simülasyon)!`, type: 'success' });
-    } else {
-      updateUserData(field, newValue);
-      setFeedback({ message: `${field === 'userName' ? 'İsim' : 'E-posta'} başarıyla güncellendi!`, type: 'success' });
+  const handleUpdate = async (field, newValue) => {
+    try {
+      // Field mapping: Modal'dan gelen field adlarını API field adlarına çevir
+      let apiField = field;
+      if (field === 'name') apiField = 'userName';
+      else if (field === 'email') apiField = 'userEmail';
+      else if (field === 'password') apiField = 'userPassword';
+      
+      // API'ye gönder
+      await updateUserData(apiField, newValue);
+      setFeedback({ 
+        message: apiField === 'userPassword' 
+          ? 'Şifre başarıyla güncellendi!' 
+          : `${apiField === 'userName' ? 'İsim' : 'E-posta'} başarıyla güncellendi!`, 
+        type: 'success' 
+      });
+    } catch (error) {
+      console.error('SettingsView: Güncelleme hatası:', error);
+      setFeedback({ 
+        message: error.message || 'Güncelleme sırasında bir hata oluştu.', 
+        type: 'error' 
+      });
     }
     setTimeout(() => setFeedback({ message: '', type: '' }), 4000);
   };

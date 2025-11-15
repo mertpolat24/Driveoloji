@@ -1,13 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X, Eye, Info } from 'lucide-react';
 
 /**
  * Dosya Önizleme Modalı
  */
 const FilePreviewModal = ({ file, onClose }) => {
+  // Modal kapanırken blob URL'i temizle
+  useEffect(() => {
+    return () => {
+      if (file?.dataUrl && file.dataUrl.startsWith('blob:')) {
+        window.URL.revokeObjectURL(file.dataUrl);
+      }
+    };
+  }, [file]);
+
   if (!file) return null;
 
-  const isImage = file.type.startsWith('image/');
+  const isImage = file.type?.startsWith('image/');
   const isPDF = file.type === 'application/pdf';
 
   return (
