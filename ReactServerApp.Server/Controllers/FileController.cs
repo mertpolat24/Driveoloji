@@ -125,6 +125,7 @@ namespace ReactServerApp.Server.Controllers
                 if (!Directory.Exists(userFolder))
                     return Ok(new List<object>());
 
+
                 var files = Directory.GetFiles(userFolder)
                                      .Select(filePath =>
                                      {
