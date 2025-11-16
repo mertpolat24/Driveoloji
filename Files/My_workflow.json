@@ -1,0 +1,641 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -592,
+        16
+      ],
+      "id": "78223c49-ea1d-46dd-a7f5-de160fa66706",
+      "name": "WhatsApp Trigger",
+      "webhookId": "17763659-615e-44ff-a8d8-90903763c418",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "DNXz05LkHCXH2F05",
+          "name": "WhatsApp OAuth account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        480,
+        256
+      ],
+      "id": "f67ba1ea-514f-48c3-a4fb-909edc5026ee",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "f7DW1IZ6zVxrUW48",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('WhatsApp Trigger').item.json.messages[0].text.body }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=1. E-posta Gönderme Mantığı:\n\nKullanıcı bir e-posta gönderme talebinde bulunduğunda, alıcı (to), konu (subject) ve içerik (body) bilgilerinin sağlanıp sağlanmadığına bakılmaksızın, her zaman bir JSON çıktısı oluşturun.\n\nEğer bu alanlardan herhangi biri (alıcı, konu veya içerik) kullanıcı tarafından belirtilmemişse, JSON içindeki ilgili alanın değeri null olarak ayarlanmalıdır.\n\nEğer alıcı e-posta adresi bir sağlayıcı ile bitiyor (örneğin; gmail, hotmail, yahoo) ancak .com uzantısı eksikse, .com uzantısını otomatik olarak ekleyin. Örnek: ali@gmail → ali@gmail.com.\n\n2. JSON Çıktı Formatı:\n\nE-posta talepleri için yanıt, her zaman ve yalnızca aşağıdaki formatta tek bir JSON nesnesi olarak döndürülmelidir. Bu formatın dışına kesinlikle çıkmayın ve harici bir mesaj eklemeyin. Output olarak tek bir çıktı verme her bir çıktı ayrı bir output olsun to, subject ve body ayrı ayrı olsun \n\nörnek json JSON\n\n[\n  {\n    \"to\": \"test@gmail.com\",\\n\n    \"subject\": \"testSubject\",\\n\n    \"body\": \"testBody\"\\n\n  }\n]\n3. Diğer Kurallar:\n\nE-postayı kendiniz göndermeyin. Yalnızca n8n'in e-posta servisinin kullanması için yukarıda belirtilen formatta JSON çıktısını sağlayın.\n\nKullanıcı e-posta gönderme talebinde bulunmuyorsa içeriğindeki alanları tamamen null olan bir json gönderin",
+          "passthroughBinaryImages": false,
+          "enableStreaming": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        528,
+        0
+      ],
+      "id": "1898673f-1a29-4012-8c4c-b90498adef3e",
+      "name": "AI Agent",
+      "alwaysOutputData": true,
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.output[0].to }}",
+        "subject": "={{ $json.output[0].subject }}",
+        "message": "={{ $json.output[0].body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1216,
+        0
+      ],
+      "id": "2e5fc188-b710-4900-8abb-cb6cd0320be4",
+      "name": "Send a message",
+      "webhookId": "9b29c491-1a69-4bea-87be-05cd79568059",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iQeJKWkUPYxHtFI7",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.labelIds[0] }}",
+        "options": {
+          "systemMessage": "=You are the “SolvoCode Assistant.”  \nAlways address the user in a formal, professional, and trustworthy tone.  \nAlways respond exclusively in Turkish.  \n\nOn first interaction, greet the user with:  \n“SolvoCode’a hoş geldiniz. Size yardımcı olmaktan memnuniyet duyarım.”  \n\nAdditional context:  \n- The person you are speaking with is named {{ $('WhatsApp Trigger').item.json.contacts[0].profile.name }}.  \n- Their phone number is {{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}, which also serves as their unique ID.  \n\nEmail parameters:  \n- to:  {{ $('AI Agent').item.json.output[0].to }}\n- subject:  {{ $('AI Agent').item.json.output[0].subject }}\n- body: {{ $('AI Agent').item.json.output[0].body }}\n\nYour responsibilities:  \n1. Speak to the user in a respectful, professional, and corporate tone.  \n2. If the user requests to send an email, you will also receive the parameter:  \n   - status: \"success\" or \"failed\"  \n\n3. Using the provided parameters (to, subject, body, status), construct a polite, professional, and clear **Turkish message** for the user:  \n   - If **status = \"success\"**, inform the user that the email was sent successfully, mentioning the to, subject, and body parameters.  \n   - If **status = \"failed\"**, inform the user that the email could not be sent, and indicate which parameter(s) may be empty or invalid (for example, Gmail format issues).  \n\n4. Do **not** include any hard-coded example messages. The AI must generate all Turkish messages dynamically based on the provided parameters.\n\n5. Subject is nullable\n6.I don't want to respond"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1392,
+        0
+      ],
+      "id": "3e2a7b58-e0f1-4ec4-9016-c7173992b47c",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        224
+      ],
+      "id": "ed6ff2e6-97cd-4baa-affc-c9a367246271",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "f7DW1IZ6zVxrUW48",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Send a message').item.json.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1504,
+        240
+      ],
+      "id": "6917164b-e16e-4ed3-a40d-32c82c666b79",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "586fb320-96ed-4c9e-99b0-e6cc3b4b583e",
+              "leftValue": "={{ $json.output[0].subject }}",
+              "rightValue": "{",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "4948e909-2b67-4d74-a6e6-80cf4f1dab23",
+              "leftValue": "={{ $json.output[0].to }}",
+              "rightValue": ".com",
+              "operator": {
+                "type": "string",
+                "operation": "endsWith"
+              }
+            },
+            {
+              "id": "a017936f-222a-4fe6-9285-b374c9e5c799",
+              "leftValue": "={{ $json.output[0].body }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        912,
+        -256
+      ],
+      "id": "3efbbca8-a120-44a7-9d82-de70c9f13fb2",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "586fb320-96ed-4c9e-99b0-e6cc3b4b583e",
+              "leftValue": "={{ $json.output }}",
+              "rightValue": "Evet",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        48,
+        -256
+      ],
+      "id": "5cac501a-8552-400e-b8a4-60ed5471a357",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.messages[0].text.body }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are the “SolvoCode Assistant.”  \nAlways address the user in a formal, professional, and trustworthy tone.  \n\nOn the first interaction, greet the user with:  \n“Welcome to SolvoCode. I am pleased to assist you.”  \n\nAdditional context:  \n- The person you are speaking with is named **{{ $json.contacts[0].profile.name }}**.  \n- Their phone number is ** {{ $json.contacts[0].wa_id }}**, which also serves as their unique ID.  \n\nYour responsibilities:  \n- Greet and address the user ({{ $json.contacts[0].profile.name }} ) in a respectful, professional manner.  \n- Use the provided phone number ({{ $json.contacts[0].wa_id }} ) as the user’s ID reference when needed.  \n- Engage in corporate-style conversation.  \n- Provide support for general tasks, answer questions clearly and efficiently.  \n- Maintain a consistent, polite, and professional style in all responses.  \n\n⚠️ IMPORTANT RULE:  \n- Always respond **exclusively in Turkish**, regardless of the language of the user’s input.  \n",
+          "passthroughBinaryImages": false,
+          "enableStreaming": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        96,
+        16
+      ],
+      "id": "a0b41b14-2877-4970-a740-8b5ac5326354",
+      "name": "AI Agent2",
+      "alwaysOutputData": true,
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        80,
+        272
+      ],
+      "id": "a7b917f3-4c39-4ec9-a92d-ad87151ab976",
+      "name": "Google Gemini Chat Model2",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "f7DW1IZ6zVxrUW48",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "769492169587231",
+        "recipientPhoneNumber": "={{ $('WhatsApp Trigger').item.json.messages[0].from }}",
+        "textBody": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        624,
+        736
+      ],
+      "id": "b5bcddda-efcb-4a23-a18a-608c6d2cd4f1",
+      "name": "Send message2",
+      "webhookId": "98e769e9-d156-498b-927e-b60e1b101bef",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "9RPs0HFog85DZyVT",
+          "name": "WhatsApp account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.messages[0].text.body }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=kullanıcı email mi göndermek istiyor? sadece Evet-Hayır olarak cevap cevap ver ",
+          "passthroughBinaryImages": false,
+          "enableStreaming": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -352,
+        0
+      ],
+      "id": "98afd922-7939-4edb-ae42-bae3ecbc63df",
+      "name": "AI Agent3",
+      "alwaysOutputData": true,
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -384,
+        224
+      ],
+      "id": "f411c5a5-a207-4353-8989-5cbed0f1c82d",
+      "name": "Google Gemini Chat Model3",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "f7DW1IZ6zVxrUW48",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "769492169587231",
+        "recipientPhoneNumber": "={{ $('WhatsApp Trigger').item.json.messages[0].from }}",
+        "textBody": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        672
+      ],
+      "id": "4629db34-fedd-46f4-b81e-f8f545e9c59c",
+      "name": "Send message1",
+      "webhookId": "98e769e9-d156-498b-927e-b60e1b101bef",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "9RPs0HFog85DZyVT",
+          "name": "WhatsApp account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "769492169587231",
+        "recipientPhoneNumber": "={{ $('WhatsApp Trigger').item.json.messages[0].from }}",
+        "textBody": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        656
+      ],
+      "id": "b669231b-667e-4a08-a382-2d15e3f89f27",
+      "name": "Send message and wait for response",
+      "webhookId": "98e769e9-d156-498b-927e-b60e1b101bef",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "9RPs0HFog85DZyVT",
+          "name": "WhatsApp account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "[\n  {\n    \"output\": \"```json\\n[\\n  {\\n    \\\"to\\\": \\\"24mertpolat@gmail.com\\\",\\n    \\\"subject\\\": \\\"iş görüşmesi n8n\\\",\\n    \\\"body\\\": \\\"saat 9 da iş yerinde toplantıda olacağız\\\"\\n  }\\n]\\n```\"\n  }\n]"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        704,
+        208
+      ],
+      "id": "4e475880-54ad-49ab-bf0f-5dc990120ba3",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('WhatsApp Trigger').item.json.messages[0].text.body }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Elimizde 3 veri var:  \n\n1. {{ $('AI Agent').item.json.output[0].to }} = alıcı email  \n2. {{ $('AI Agent').item.json.output[0].subject }} = mailin konu başlığı  \n3. {{ $('AI Agent').item.json.output[0].body }} = mail içeriği  \n\nKurallar:  \n1. Eğer herhangi bir veri null ise, kullanıcıya bilgilendirme mesajı göster:  \n   - Mesajlar sabit olmasın; AI kendi üslubunu kullanarak farklı cümleler oluşturabilir.  \n   - Mesaj mutlaka hangi veri eksik olduğunu ve mailin hangi alıcıya gönderilemediğini net olarak belirtmeli.  \n   - Örnek mesaj formatları:  \n     * \"Görünüşe göre alıcı email eksik, bu yüzden mail gönderilemedi.\"  \n     * \"Mailin konusu boş, alıcıya ulaştırılamadı. Lütfen kontrol edin.\"  \n     * \"Mail içeriği eksik, gönderim başarısız oldu.\"  \n   - Eğer birden fazla veri null ise, her biri için ayrı mesaj üret.  \n\n2. Tüm veriler dolu ise, işlemi sorunsuz devam ettir.  \n\n3. Sadece kullanıcıya gösterilecek mesajları üret; verileri değiştirme veya mail gönderme işlemi yapma.  \n",
+          "passthroughBinaryImages": false,
+          "enableStreaming": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        976,
+        336
+      ],
+      "id": "a95087a5-8133-4e70-93d1-b6bf3f5a7a20",
+      "name": "AI Agent4",
+      "alwaysOutputData": true,
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        912,
+        544
+      ],
+      "id": "c202c634-7dee-4d68-82f5-919eb7128fbe",
+      "name": "Google Gemini Chat Model4",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "f7DW1IZ6zVxrUW48",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Send message and wait for response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent2": {
+      "main": [
+        [
+          {
+            "node": "Send message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent3": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent3",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent4": {
+      "main": [
+        [
+          {
+            "node": "Send message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent4",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2fda2273-bd40-4440-a24a-32d4402d95fe",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2526681363e4515ec14006e2897ec9246136b77fa3d507b3db532f304e0656b0"
+  },
+  "id": "rDZfuLfSa7Yiez8j",
+  "tags": []
+}
